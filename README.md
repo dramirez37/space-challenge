@@ -86,3 +86,11 @@ The following files contain the complete and executable SQL code for this projec
 * `bookings.sql`: Creates and populates the `bookings` table.
 * `create_helpers.sql`: Creates the `agent_capacity` and `learned_weights_table` helper tables.
 * `analysis.sql`: Creates the `AssignBestAgents` stored procedure.
+* `test.sql`: Test script which simulates a customer interested in a luxury trip to Mars.
+
+## Python Code
+
+The following files were used in the development of the model and visual aids for this project:
+
+* `train_weights.py`: Trains weights for the agent assignment model through logistic regression and appends them to the `learned_weights_table` helper table.
+* `generate_report.py`: Generates visual aids for the final report, runs `test.sql` to generate sample results, and saves them to results folder.
