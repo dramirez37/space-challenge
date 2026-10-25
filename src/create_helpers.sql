@@ -1,6 +1,5 @@
 -- Setup support tables. Re-running is safe and never overwrites trained weights.
-USE master;
-GO
+-- Execute in the intended isolated demo database (never master).
 IF OBJECT_ID('dbo.agent_capacity', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.agent_capacity (
