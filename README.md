@@ -2,7 +2,7 @@
 
 An end-to-end **synthetic** customer-to-agent ranking demonstration using SQL Server, Python, logistic regression, and point-in-time historical features.
 
-**Status:** research/portfolio prototype. This is not a production dispatch system, has not demonstrated real-world booking uplift, and has no externally verified predictive performance. The generated example ranking in `results/test_output.md` is a legacy artifact and **not** an out-of-sample accuracy report.
+**Status:** research/portfolio prototype. This is not a production dispatch system, has not demonstrated real-world booking uplift, and has no externally verified predictive performance. The existing example ranking in `results/test_output.md` is a legacy artifact and **not** an out-of-sample accuracy report.
 
 ## Business question
 
@@ -17,7 +17,7 @@ The application calculates historical conversion/revenue metrics with a SQL Serv
 - `src/feature_pipeline.sql`: `dbo.AgentFeaturesAt` table-valued function using events strictly before an as-of timestamp.
 - `src/train_weights.py`: labels, temporal integrity checks, chronological training/holdout, baseline comparisons, optional gated coefficient write.
 - `src/analysis.sql`: `dbo.AssignBestAgents` stored procedure, scoring only eligible agents with saved coefficients.
-- `src/generate_report.py`: legacy ranking and chart script; outputs are not validation.
+- `src/generate_report.py`: illustrative reporting script; outputs are not validation.
 - `test/test_temporal_pipeline.py`: tests temporal boundaries, invalid outcomes, pending cases, and evaluation contract.
 - `test/test.sql`: example procedure invocation.
 
@@ -48,7 +48,7 @@ These examples are fiction, not customer records. The dataset is small and may e
 5. Set `DATABASE_URL` to the demo database. Example (no real password): `mssql+pyodbc://<user>:<password>@<host>/<database>?driver=ODBC+Driver+18+for+SQL+Server`
 6. Run `python src/train_weights.py --metrics-out results/evaluation.json` **without** `--write-weights` first. Inspect temporal holdout AUC, Brier score, log loss and the constant-rate baseline. AUC alone is not adequate for probability quality.
 7. To publish coefficients only if held-out Brier improves on the baseline: `python src/train_weights.py --write-weights`. This replaces seven rows in the model-weight table in one transaction. It is not a deployment to a real service.
-8. Call `dbo.AssignBestAgents` as shown in `test/test.sql`, using a realistic `@AsOf` that follows the 2081 fixture history. If validated weights have not been written, the stored procedure fails closed.
+8. Call `dbo.AssignBestAgents` as shown in `test/test.sql`, using a realistic `@AsOf` that follows the 2081 fixture history. Or run `python src/generate_report.py` to create an illustrative ranking. If validated weights have not been written, the stored procedure fails closed.
 
 All generated metrics must be **run-derived**. Do not claim predictive performance from the sample rankings or README.
 
