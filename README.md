@@ -1,96 +1,72 @@
-# Astra Luxury Travel: Agent Assignment Algorithm
+# Astra Agent Assignment — SQL Server Decision-Support Prototype
 
-## Overview
+An end-to-end **synthetic** customer-to-agent ranking demonstration using SQL Server, Python, logistic regression, and point-in-time historical features.
 
-This project implements a real-time, data-driven algorithm to match prospective customers with the ideal Astra space travel agent. The system analyzes historical performance data to predict which agent is most likely to secure a booking, ensuring each customer is paired with an agent equipped to meet their needs and upsell luxury packages. The result is a system designed to improve booking rates, increase total revenue, and provide a superior customer journey.
+**Status:** research/portfolio prototype. This is not a production dispatch system, has not demonstrated real-world booking uplift, and has no externally verified predictive performance. The generated example ranking in `results/test_output.md` is a legacy artifact and **not** an out-of-sample accuracy report.
 
-***
+## Business question
 
-### How It Works: The "Match Score"
+Can historical agent outcomes help prioritize an eligible agent for an incoming customer without leaking the customer's eventual booking outcome into the recommendation?
 
-The core of the system is the **Match Score**, a single number on a 0-100 scale that ranks each agent's suitability for a new customer. The score is calculated by the `AssignBestAgents` SQL procedure, which evaluates agents on nine key performance features. These features are weighted based on a logistic regression model trained on historical booking data to identify the factors that most strongly correlate with a successful booking.
+The application calculates historical conversion/revenue metrics with a SQL Server table-valued function, trains a logistic baseline in Python using a chronological holdout, and (only with an explicit gated option) stores coefficients for a T-SQL ranking procedure.
 
-***
+## Repository
 
-### Understanding Feature Importance
+- `src/space_travel_agents.sql`, `src/assignment_history.sql`, `src/bookings.sql`: synthetic fixtures (30 agents, 450 assignments, 412 bookings).
+- `src/create_helpers.sql`: initializes capacity and empty coefficient tables (rerunnable).
+- `src/feature_pipeline.sql`: `dbo.AgentFeaturesAt` table-valued function using events strictly before an as-of timestamp.
+- `src/train_weights.py`: labels, temporal integrity checks, chronological training/holdout, baseline comparisons, optional gated coefficient write.
+- `src/analysis.sql`: `dbo.AssignBestAgents` stored procedure, scoring only eligible agents with saved coefficients.
+- `src/generate_report.py`: legacy ranking and chart script; outputs are not validation.
+- `test/test_temporal_pipeline.py`: tests temporal boundaries, invalid outcomes, pending cases, and evaluation contract.
+- `test/test.sql`: example procedure invocation.
 
-The model automatically learns how important each feature is in predicting a successful booking. Some features have a **positive** importance (a good sign), while others have a **negative** importance (a potential warning sign).
+## Why this revision was necessary
 
-![Feature Importance](results/feature_importance.png)
+The original project unintentionally trained on features derived from the outcome being predicted (e.g. revenue from the same eventual confirmed booking). Training normalization also differed from the SQL scoring normalization, and the availability denominator used the wrong guard.
 
-* **Positive Importance (Good Signs)**
-    A feature with positive importance, like `revenue_score`, directly increases an agent's `MatchScore`. The higher an agent scores in this area, the more the model recommends them.
+The revised feature function uses **only histories that precede each incoming assignment**. Confirmed/cancelled outcomes contribute only after their resolution time; pending outcomes are **not automatically treated as failures**. Snapshot-only fields (such as current agent ratings) are deliberately excluded from historical training. The model uses the **same six features** in Python and SQL without incompatible transformations.
 
-* **Negative Importance (Warning Signs)**
-    A feature with negative importance, like `availability_score`, acts as a penalty. The model observed that agents with a low availability score (meaning they are very busy) were often the most successful. The model learned this pattern and will penalize agents who are *too* available, as it may indicate they are not in high demand. This reveals a key insight: availability should be treated more as a simple "yes/no" filter rather than a factor of skill.
+### Fixture-quality limitations
 
-Here is a simple breakdown of each feature:
+An audit found **18 synthetic booking records** where the recorded completion/cancellation precedes the associated assignment. The training routine excludes these invalid outcomes and reports their count. It does not silently correct the raw data. Historical availability is approximated from unresolved assignments; real systems should use capacity/queue events with timestamped start and release times.
 
-* **Revenue Score**: The total revenue an agent has generated from past confirmed bookings. This is the strongest indicator of an agent's ability to close high-value deals.
-* **Availability Score**: An agent's current capacity to take on new assignments.
-* **Experience Score**: The number of years an agent has been with Astra.
-* **Requirements Score**: A flag that gives a boost to agents in the "Luxury Voyages" department when a customer's request includes luxury keywords.
-* **Recency Score**: A measure of an agent's recent success, based on confirmed bookings in the last 30 days of the data.
-* **Destination Expertise Score**: An agent's success rate for the specific destination the customer is interested in.
-* **Rating Score**: The agent's average customer service rating.
-* **Communication Score**: An agent's success rate with the customer's preferred communication method.
-* **Lead Conversion Score**: An agent's historical success rate with the customer's lead source.
+These examples are fiction, not customer records. The dataset is small and may encode artificial patterns.
 
-***
+## Requirements
 
-## Sample Results
+- SQL Server 2017 or newer (supports `CREATE OR ALTER`, `PERCENT_RANK` in older artifacts, `CONCAT`, and table-valued functions).
+- Python 3.11+, ODBC Driver 17/18 for SQL Server, and packages in `requirements.txt`.
+- Environment variable `DATABASE_URL` with a SQLAlchemy SQL Server connection URL. Do not commit credentials.
 
-The final output is a ranked list of agents and their **Match Score**. The example below is the direct result of running the `test.sql` script, which simulates a customer interested in a luxury trip to Mars.
+## Reproduce
 
-|   AgentID | AgentName     |   MatchScore |
-|----------:|:--------------|-------------:|
-|        19 | Calypso White |        100   |
-|         6 | Soren Baker   |         91   |
-|        17 | Lyra Morgan   |         90.2 |
-|         7 | Mira Patel    |         83.7 |
-|        27 | Ronan Young   |         81.8 |
-|         3 | Nova Singh    |         76.9 |
-|         5 | Vera Nguyen   |         74.2 |
-|        12 | Nia Ramirez   |         66   |
-|        28 | Mila Reed     |         63.9 |
-|        23 | Cassian Ward  |         63.4 |
-|        25 | Enzo Nguyen   |         60.4 |
-|        24 | Phoebe Diaz   |         60   |
-|        11 | Elias Walker  |         57.1 |
-|        13 | Atlas Foster  |         57.1 |
-|        20 | Orla Patel    |         53   |
-|         9 | Luna Martinez |         47.1 |
-|         1 | Aurora Tanaka |         45.4 |
-|        22 | Juno Brooks   |         44.8 |
-|        18 | Dax Reyes     |         39.3 |
-|        30 | Zuri Bennett  |         38.7 |
-|        15 | Rhea Chen     |         36.7 |
-|         4 | Leo Kim       |         36.1 |
-|        14 | Selene Ali    |         29.3 |
-|        10 | Zara Khan     |         17.8 |
-|        21 | Arlo Scott    |         13.1 |
-|        26 | Vega Price    |         12   |
-|         2 | Kai Rodriguez |         11.7 |
-|        29 | Sage Cooper   |          7   |
-|        16 | Zion Parker   |          4.9 |
-|         8 | Orion Davis   |          0   |
+1. Create an isolated SQL Server database (or use an isolated demo instance). The original fixture scripts use the current database context; review before execution.
+2. Run in order with SQL Server tooling: `src/space_travel_agents.sql`, `src/assignment_history.sql`, `src/bookings.sql`, `src/create_helpers.sql`, `src/feature_pipeline.sql`, `src/analysis.sql`. Execute batches separated by `GO` correctly.
+3. `python -m pip install -r requirements.txt`
+4. `python -m pytest -q`
+5. Set `DATABASE_URL` to the demo database. Example (no real password): `mssql+pyodbc://<user>:<password>@<host>/<database>?driver=ODBC+Driver+18+for+SQL+Server`
+6. Run `python src/train_weights.py --metrics-out results/evaluation.json` **without** `--write-weights` first. Inspect temporal holdout AUC, Brier score, log loss and the constant-rate baseline. AUC alone is not adequate for probability quality.
+7. To publish coefficients only if held-out Brier improves on the baseline: `python src/train_weights.py --write-weights`. This replaces seven rows in the model-weight table in one transaction. It is not a deployment to a real service.
+8. Call `dbo.AssignBestAgents` as shown in `test/test.sql`, using a realistic `@AsOf` that follows the 2081 fixture history. If validated weights have not been written, the stored procedure fails closed.
 
-***
+All generated metrics must be **run-derived**. Do not claim predictive performance from the sample rankings or README.
 
-## SQL Code
+## Scoring design
 
-The following files contain the complete and executable SQL code for this project:
+Features: smoothed historical conversion rate; recent conversion; lead-source conversion; communication-channel conversion; log prior confirmed revenue; and an approximate historical availability fraction. The output is the model's logistic probability scaled to a 0–100 *MatchScore*. It is a relative decision-support score, **not** a guaranteed conversion rate.
 
-* `space_travel_agents.sql`: Creates and populates the `space_travel_agents` table.
-* `assignment_history.sql`: Creates and populates the `assignment_history` table.
-* `bookings.sql`: Creates and populates the `bookings` table.
-* `create_helpers.sql`: Creates the `agent_capacity` and `learned_weights_table` helper tables.
-* `analysis.sql`: Creates the `AssignBestAgents` stored procedure.
-* `test.sql`: Test script which simulates a customer interested in a luxury trip to Mars.
+The scoring procedure retains `@Destination`, `@Requirements`, `@LaunchLocation`, and `@CustomerName` for compatibility with the original test call, but **does not incorporate them into the learned model**. It is not a personalized destination-expertise recommendation. The reported scores are not causally identified, and historical conversion rates may reflect previous assignment policies.
 
-## Python Code
+## Open engineering work
 
-The following files were used in the development of the model and visual aids for this project:
+- Validate on operational, time-stamped agent-capacity data, preferably with randomized or policy-aware evaluation.
+- Implement explicit missing-data rules and handling of delayed labels.
+- Verify SQL Server end-to-end execution in CI on a supported database instance.
+- Add fairness checks, business-rule eligibility, monitoring, and full deployment controls before any production use.
 
-* `train_weights.py`: Trains weights for the agent assignment model through logistic regression and appends them to the `learned_weights_table` helper table.
-* `generate_report.py`: Generates visual aids for the final report, runs `test.sql` to generate sample results, and saves them to results folder.
+## Résumé wording supported today
+
+> Developed a synthetic agent-assignment prototype with SQL Server stored procedures, as-of SQL features, Python/logistic regression, and reproducible ranking outputs; added chronological evaluation and data-quality safeguards.
+
+Do **not** claim proven conversion or revenue lifts without external evaluation.
